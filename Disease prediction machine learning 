@@ -1,0 +1,232 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+class DiseasePredictionModel:
+    def __init__(self):
+        """
+        Initialize the disease prediction model with key components
+        for data preprocessing and machine learning.
+        """
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
+        self.scaler = StandardScaler()
+        self.classifier = RandomForestClassifier(
+            n_estimators=100, 
+            random_state=42, 
+            n_jobs=-1
+        )
+        self.mlb = MultiLabelBinarizer()
+
+    def load_data(self, filepath):
+        """
+        Load medical data from a CSV file.
+        
+        Parameters:
+        -----------
+        filepath : str
+            Path to the CSV file containing medical data
+        
+        Returns:
+        --------
+        pd.DataFrame
+            Loaded medical dataset
+        """
+        try:
+            data = pd.read_csv(filepath)
+            print("Data loaded successfully:")
+            print(data.head())
+            print("\nDataset Information:")
+            print(data.info())
+            return data
+        except Exception as e:
+            print(f"Error loading data: {e}")
+            return None
+
+    def preprocess_data(self, data, features, target_column):
+        """
+        Preprocess the medical data for machine learning.
+        
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            Input medical dataset
+        features : list
+            List of feature column names
+        target_column : str
+            Name of the target column for prediction
+        
+        Returns:
+        --------
+        tuple
+            Processed features (X) and target variables (y)
+        """
+        # Handle missing values
+        data[features] = data[features].fillna(data[features].mean())
+        
+        # Separate features and target
+        X = data[features]
+        y = data[target_column]
+        
+        # Scale features
+        X_scaled = self.scaler.fit_transform(X)
+        
+        return X_scaled, y
+
+    def split_data(self, X, y, test_size=0.2):
+        """
+        Split data into training and testing sets.
+        
+        Parameters:
+        -----------
+        X : numpy.ndarray
+            Scaled feature matrix
+        y : pandas.Series
+            Target variable
+        test_size : float, optional
+            Proportion of the dataset to include in test split
+        
+        Returns:
+        --------
+        None
+        """
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42, stratify=y
+        )
+        print("Data split completed:")
+        print(f"Training set shape: {self.X_train.shape}")
+        print(f"Testing set shape: {self.X_test.shape}")
+
+    def train_model(self):
+        """
+        Train the RandomForestClassifier on the training data.
+        
+        Returns:
+        --------
+        float
+            Model training accuracy
+        """
+        self.classifier.fit(self.X_train, self.y_train)
+        train_accuracy = self.classifier.score(self.X_train, self.y_train)
+        print(f"Training Accuracy: {train_accuracy:.4f}")
+        return train_accuracy
+
+    def evaluate_model(self):
+        """
+        Evaluate the model on test data and generate 
+        comprehensive performance metrics.
+        
+        Returns:
+        --------
+        dict
+            Performance metrics including classification report
+        """
+        # Predictions
+        y_pred = self.classifier.predict(self.X_test)
+        
+        # Classification Report
+        print("\nClassification Report:")
+        class_report = classification_report(
+            self.y_test, y_pred, output_dict=True
+        )
+        print(classification_report(self.y_test, y_pred))
+        
+        # Confusion Matrix Visualization
+        plt.figure(figsize=(10, 8))
+        cm = confusion_matrix(self.y_test, y_pred)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title('Confusion Matrix')
+        plt.ylabel('True Label')
+        plt.xlabel('Predicted Label')
+        plt.tight_layout()
+        plt.savefig('confusion_matrix.png')
+        plt.close()
+        
+        # Feature Importance
+        feature_importance = self.classifier.feature_importances_
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(feature_importance)), feature_importance)
+        plt.title('Feature Importance')
+        plt.xlabel('Features')
+        plt.ylabel('Importance Score')
+        plt.tight_layout()
+        plt.savefig('feature_importance.png')
+        plt.close()
+        
+        return {
+            'classification_report': class_report,
+            'confusion_matrix': cm,
+            'feature_importance': feature_importance
+        }
+
+    def predict_disease(self, new_data):
+        """
+        Predict disease likelihood for new medical data.
+        
+        Parameters:
+        -----------
+        new_data : numpy.ndarray
+            Scaled feature matrix for new samples
+        
+        Returns:
+        --------
+        numpy.ndarray
+            Predicted disease classes
+        """
+        # Scale new data using the same scaler
+        new_data_scaled = self.scaler.transform(new_data)
+        
+        # Predict probabilities
+        predictions = self.classifier.predict(new_data_scaled)
+        prediction_proba = self.classifier.predict_proba(new_data_scaled)
+        
+        return predictions, prediction_proba
+
+def main():
+    """
+    Main function to demonstrate the disease prediction workflow.
+    """
+    # Initialize the model
+    disease_predictor = DiseasePredictionModel()
+    
+    # Load sample medical dataset (replace with your actual dataset)
+    sample_data = pd.DataFrame({
+        'age': [45, 55, 35, 65, 50],
+        'blood_pressure': [120, 140, 110, 160, 130],
+        'cholesterol': [200, 250, 180, 280, 220],
+        'diabetes': [0, 1, 0, 1, 0],
+        'disease': ['heart_disease', 'diabetes', 'none', 'heart_disease', 'diabetes']
+    })
+    
+    # Define features and target
+    features = ['age', 'blood_pressure', 'cholesterol', 'diabetes']
+    target_column = 'disease'
+    
+    # Preprocess data
+    X, y = disease_predictor.preprocess_data(sample_data, features, target_column)
+    
+    # Split data
+    disease_predictor.split_data(X, y)
+    
+    # Train model
+    disease_predictor.train_model()
+    
+    # Evaluate model
+    disease_predictor.evaluate_model()
+    
+    # Example prediction
+    new_patient_data = np.array([[50, 135, 210, 0]])
+    predictions, probabilities = disease_predictor.predict_disease(new_patient_data)
+    print("\nNew Patient Prediction:")
+    print(f"Predicted Disease: {predictions[0]}")
+    print(f"Prediction Probabilities: {probabilities[0]}")
+
+if __name__ == "__main__":
+    main()
